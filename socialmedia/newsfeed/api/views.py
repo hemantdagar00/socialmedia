@@ -9,8 +9,10 @@ from rest_framework.viewsets import GenericViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateModelMixin, CreateModelMixin, DestroyModelMixin
 from rest_framework.exceptions import NotFound
 from .serializers import StatusCreateSerializer, StatusDetailSerializer, StatusUpdateSerializer, StatusVotesUpdateSerializer, \
-    CommentDetailSerializer, CommentCreateSerializer, CommentUpdateSerializer, CommentVotesUpdateSerializer
-from socialmedia.newsfeed.models import Status, Comment
+    CommentDetailSerializer, CommentCreateSerializer, CommentUpdateSerializer, CommentVotesUpdateSerializer, \
+    UserFollowSerializer, UserUnfollowAndRemoveFollowerSerializer, UserBlockSerializer, UserUnblockSerializer, \
+    UserRequestAcceptDenySerializer, UserRelationDetailDetailSerializer
+from socialmedia.newsfeed.models import Status, Comment, UserRelationDetail
 from rest_framework.exceptions import ValidationError
 
 User = get_user_model()
@@ -196,6 +198,68 @@ class CommentViewSet(RetrieveModelMixin,
 
 
 
+
+
+class UserRelationDetailViewSet(RetrieveModelMixin,
+                  ListModelMixin,
+                  UpdateModelMixin,
+                  DestroyModelMixin,
+                  CreateModelMixin,
+                  GenericViewSet):
+    queryset = UserRelationDetail.objects.all()
+    lookup_field = "id"
+
+    def get_serializer_class(self):
+        if (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "follow"
+        ):
+            return UserFollowSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "unfollow_and_remove_follower"
+        ):
+            return UserUnfollowAndRemoveFollowerSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "block"
+        ):
+            return UserBlockSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "unblock"
+        ):
+            return UserUnblockSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "accept_deny"
+        ):
+            return UserRequestAcceptDenySerializer
+        else:
+            return UserRelationDetailDetailSerializer
+
+    @action(detail=False)
+    def me(self, request):
+        serializer = UserRelationDetailDetailSerializer(request.status, context={"request": request})
+        return Response(status=status.HTTP_200_OK, data=serializer.data)
+
+    @action(methods=["POST"], detail=True)
+    def follow(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response({"response": response_serializer.data, "status": "success"}, status=status.HTTP_201_CREATED)
+
+    def get_queryset(self, *args, **kwargs):  # used in get_object
+        return self.queryset.all()
+
+    def get_object(self, *args, **kwargs):  # used in update
+        self.queryset = self.get_queryset()
+        obj = self.queryset.filter(id=self.kwargs['id']).first()
+        if not obj:
+            raise NotFound("User relation detail not found.")
+        return obj
 
 
 
