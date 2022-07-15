@@ -11,7 +11,8 @@ class Status(models.Model):
     like = models.IntegerField(default=0)
     dislike = models.IntegerField(default=0)
 
+
 class VoteTracker(models.Model):
     status = models.ForeignKey('Status', models.CASCADE)
     user = models.ForeignKey('users.User', models.CASCADE)
-    vote = models.BooleanField(null=False,blank=False)
+    vote = models.BooleanField(null=False, blank=False)
