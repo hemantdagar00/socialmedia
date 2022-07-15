@@ -14,7 +14,6 @@ class Status(models.Model):
     comments = models.IntegerField(default=0)
 
 
-class VoteTracker(models.Model):
 
 class StatusVoteTracker(models.Model):
     status = models.ForeignKey('Status', models.CASCADE)
