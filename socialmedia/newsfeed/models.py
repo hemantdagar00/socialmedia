@@ -39,10 +39,10 @@ class CommentVoteTracker(models.Model):
 
 
 class UserRelationDetail(models.Model):
-    user = models.ForeignKey('users.User', models.CASCADE)
-    following_list = models.ForeignKey('users.User', models.CASCADE, null=True, blank=True)
-    follower_list = models.ForeignKey('users.User', models.CASCADE, null=True, blank=True)
-    block_list = models.ForeignKey('users.User', models.CASCADE, null=True, blank=True)
-    req_rx = models.ForeignKey('users.User', models.CASCADE, null=True, blank=True)
-    req_sent  = models.ForeignKey('users.User', models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey('users.User', models.CASCADE, related_name='user', )
+    following_list = models.ForeignKey('users.User', models.CASCADE, related_name='following_list', null=True, blank=True)
+    follower_list = models.ForeignKey('users.User', models.CASCADE, related_name='follower_list', null=True, blank=True)
+    block_list = models.ForeignKey('users.User', models.CASCADE, related_name='block_list', null=True, blank=True)
+    req_rx = models.ForeignKey('users.User', models.CASCADE, related_name='req_rx', null=True, blank=True)
+    req_sent  = models.ForeignKey('users.User', models.CASCADE, related_name='req_sent', null=True, blank=True)
 

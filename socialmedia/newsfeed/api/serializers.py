@@ -6,7 +6,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 import re
-from socialmedia.newsfeed.models import Status, StatusVoteTracker, Comment, CommentVoteTracker
+from socialmedia.newsfeed.models import Status, StatusVoteTracker, Comment, CommentVoteTracker, UserRelationDetail
 from socialmedia.users.api.serializers import UserDetailSerializer
 
 User = get_user_model()
@@ -305,6 +305,66 @@ class CommentVotesUpdateSerializer(serializers.ModelSerializer):
         instance.dislike = validated_data.get('dislike', instance.dislike)
         instance.save()
         return instance
+
+
+#-----------------------------------------------------------------------------------
+
+
+class UserRelationDetailDetailSerializer(serializers.ModelSerializer):
+    # user = serializers.CharField(source="user.username")
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ["id", "user", "following_list", "follower_list", "block_list", "req_rx", "req_sent", "url"]
+
+        extra_kwargs = {
+            "url": {"view_name": "api:userrelationdetail-detail", "lookup_field": "id"}
+        }
+
+class UserFollowSerializer(serializers.ModelSerializer):
+    pass
+
+
+class UserUnfollowAndRemoveFollowerSerializer(serializers.ModelSerializer):
+    pass
+
+
+class UserBlockSerializer(serializers.ModelSerializer):
+    pass
+
+
+class UserUnblockSerializer(serializers.ModelSerializer):
+    pass
+
+
+class UserRequestAcceptDenySerializer(serializers.ModelSerializer):
+    pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
