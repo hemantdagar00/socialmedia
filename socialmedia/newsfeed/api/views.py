@@ -8,10 +8,12 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateModelMixin, CreateModelMixin, DestroyModelMixin
 from rest_framework.exceptions import NotFound
-from .serializers import StatusCreateSerializer, StatusDetailSerializer, StatusUpdateSerializer, StatusVotesUpdateSerializer, \
+from .serializers import StatusCreateSerializer, StatusDetailSerializer, StatusUpdateSerializer, \
+    StatusVotesUpdateSerializer, \
     CommentDetailSerializer, CommentCreateSerializer, CommentUpdateSerializer, CommentVotesUpdateSerializer, \
-    UserFollowSerializer, UserUnfollowAndRemoveFollowerSerializer, UserBlockSerializer, UserUnblockSerializer, \
-    UserRequestAcceptDenySerializer, UserRelationDetailDetailSerializer
+    UserFollowSerializer, UserUnfollowSerializer, UserBlockSerializer, UserUnblockSerializer, \
+    UserRequestAcceptSerializer, UserRelationDetailDetailSerializer, UserRequestDenySerializer, \
+    UserRemoveFollowerSerializer
 from socialmedia.newsfeed.models import Status, Comment, UserRelationDetail
 from rest_framework.exceptions import ValidationError
 
@@ -217,9 +219,14 @@ class UserRelationDetailViewSet(RetrieveModelMixin,
             return UserFollowSerializer
         elif (
             hasattr(self, "action_map")
-            and self.action_map.get("post", "") == "unfollow_and_remove_follower"
+            and self.action_map.get("post", "") == "unfollow"
         ):
-            return UserUnfollowAndRemoveFollowerSerializer
+            return UserUnfollowSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "remove_follower"
+        ):
+            return UserRemoveFollowerSerializer
         elif (
             hasattr(self, "action_map")
             and self.action_map.get("post", "") == "block"
@@ -232,9 +239,14 @@ class UserRelationDetailViewSet(RetrieveModelMixin,
             return UserUnblockSerializer
         elif (
             hasattr(self, "action_map")
-            and self.action_map.get("post", "") == "accept_deny"
+            and self.action_map.get("post", "") == "accept"
         ):
-            return UserRequestAcceptDenySerializer
+            return UserRequestAcceptSerializer
+        elif (
+            hasattr(self, "action_map")
+            and self.action_map.get("post", "") == "deny"
+        ):
+            return UserRequestDenySerializer
         else:
             return UserRelationDetailDetailSerializer
 
@@ -243,13 +255,62 @@ class UserRelationDetailViewSet(RetrieveModelMixin,
         serializer = UserRelationDetailDetailSerializer(request.status, context={"request": request})
         return Response(status=status.HTTP_200_OK, data=serializer.data)
 
-    @action(methods=["POST"], detail=True)
+    @action(methods=["POST"], detail=False)
     def follow(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         obj = serializer.save(serializer.validated_data)
         response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
         return Response({"response": response_serializer.data, "status": "success"}, status=status.HTTP_201_CREATED)
+
+    @action(methods=["POST"], detail=False)
+    def unfollow(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response(data={"status":"success"}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=["POST"], detail=False)
+    def remove_follower(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response(data={"status":"success"}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=["POST"], detail=False)
+    def accept(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response({"response": response_serializer.data, "status": "success"}, status=status.HTTP_201_CREATED)
+
+    @action(methods=["POST"], detail=False)
+    def deny(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response(data={"status":"success"}, status=status.HTTP_204_NO_CONTENT)
+
+    @action(methods=["POST"], detail=False)
+    def block(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response({"response": response_serializer.data, "status": "success"}, status=status.HTTP_201_CREATED)
+
+    @action(methods=["POST"], detail=False)
+    def unblock(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        obj = serializer.save(serializer.validated_data)
+        response_serializer = UserRelationDetailDetailSerializer(obj, context={'request': request})
+        return Response(data={"status":"success"}, status=status.HTTP_204_NO_CONTENT)
+
 
     def get_queryset(self, *args, **kwargs):  # used in get_object
         return self.queryset.all()

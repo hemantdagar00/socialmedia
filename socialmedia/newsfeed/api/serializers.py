@@ -1,6 +1,6 @@
 from urllib import request
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, models
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
@@ -14,6 +14,7 @@ User = get_user_model()
 
 class StatusDetailSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source="user.username")
+
     class Meta:
         model = Status
         fields = ["id", "user", "status_photo", "status_text", "like", "dislike", "comments", "url"]
@@ -88,6 +89,11 @@ class StatusVotesUpdateSerializer(serializers.ModelSerializer):
 
         elif attrs['up_vote'] == attrs['down_vote']:
             raise ValidationError("You can not like and dislike the status at same time.")
+
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user,
+                                                 following_list=self.instance.user.id).exists()):
+            raise ValidationError("This status not exist/ because you do not follow the user of the status.")
+
 
         elif attrs['up_vote'] == True:
             if not StatusVoteTracker.objects.filter(status=self.instance.id).exists():
@@ -181,6 +187,8 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         if value == False:
             raise ValidationError("You are allowed to either comment on a Status or on a Comment")
 
+        #add validation for the current user or the follower
+
         if (attrs["comment_photo"] == None) and (attrs["comment_text"] == ""):
             value = False
         elif (attrs["comment_photo"] != None) and (attrs["comment_text"] == ""):
@@ -248,6 +256,11 @@ class CommentVotesUpdateSerializer(serializers.ModelSerializer):
         elif attrs['up_vote'] == attrs['down_vote']:
             raise ValidationError("You can not like and dislike the status at same time.")
 
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user,
+                                                 following_list=self.instance.user.id).exists()):
+            raise ValidationError("This comment not exist/ because you do not follow the user of the status.")
+
+
         elif attrs['up_vote'] == True:
             if not CommentVoteTracker.objects.filter(comment=self.instance.id).exists():
                 self.instance.like += 1
@@ -309,36 +322,291 @@ class CommentVotesUpdateSerializer(serializers.ModelSerializer):
 
 #-----------------------------------------------------------------------------------
 
-
 class UserRelationDetailDetailSerializer(serializers.ModelSerializer):
-    # user = serializers.CharField(source="user.username")
+    user = serializers.CharField(source="user.username")
+    user_list = serializers.SerializerMethodField()
+
+    def get_user_list(self, obj):
+        user_list = []
+        for user in User.objects.all():
+            user_list.append(
+                {
+                    'id':user.id,
+                    'username':user.username,
+                }
+            )
+        return user_list
 
     class Meta:
         model = UserRelationDetail
-        fields = ["id", "user", "following_list", "follower_list", "block_list", "req_rx", "req_sent", "url"]
+        fields = ["id", "user", "following_list", "follower_list", "block_list", "req_rx", "req_sent", "url", "user_list"]
 
         extra_kwargs = {
             "url": {"view_name": "api:userrelationdetail-detail", "lookup_field": "id"}
         }
 
+
 class UserFollowSerializer(serializers.ModelSerializer):
-    pass
+    user2 = serializers.IntegerField(allow_null=False)
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not follow yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,block_list=attrs["user2"]).exists()):
+            raise ValidationError("You blocked this user.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,req_sent=attrs["user2"]).exists()):
+            raise ValidationError("You already sent request to this user.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        instance = UserRelationDetail.objects.create(
+            user=self.context['request'].user,
+            req_sent=user2,
+        )
+
+        UserRelationDetail.objects.create(
+            user=user2,
+            req_rx=self.context['request'].user,
+        )
+
+        return instance
 
 
-class UserUnfollowAndRemoveFollowerSerializer(serializers.ModelSerializer):
-    pass
+class UserUnfollowSerializer(serializers.ModelSerializer):
+    user2 = serializers.IntegerField(allow_null=False)
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not unfollow yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,block_list=attrs["user2"]).exists()):
+            raise ValidationError("You blocked this user.")
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                following_list=attrs["user2"]).exists()):
+            raise ValidationError("You did not follow this user.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+
+        instance = UserRelationDetail.objects.all()
+
+        UserRelationDetail.objects.filter(
+            user=self.context['request'].user,
+            following_list=user2,
+        ).delete()
+
+        UserRelationDetail.objects.filter(
+            user=user2,
+            follower_list=self.context['request'].user,
+        ).delete()
+
+        return instance
+
+
+class UserRemoveFollowerSerializer(serializers.ModelSerializer):
+    user2 = serializers.IntegerField(allow_null=False)
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not unfollow yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,block_list=attrs["user2"]).exists()):
+            raise ValidationError("You blocked this user.")
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                    follower_list=attrs["user2"]).exists()):
+            raise ValidationError("This user is not following you.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        instance = UserRelationDetail.objects.all()
+
+        UserRelationDetail.objects.filter(
+            user=self.context['request'].user,
+            follower_list=user2,
+        ).delete()
+
+        UserRelationDetail.objects.filter(
+            user=user2,
+            following_list=self.context['request'].user,
+        ).delete()
+
+        return instance
 
 
 class UserBlockSerializer(serializers.ModelSerializer):
-    pass
+    user2 = serializers.IntegerField(allow_null=False)
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not block yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif UserRelationDetail.objects.filter(user=self.context['request'].user.id, block_list=attrs["user2"]).exists():
+            raise ValidationError("You already blocked this user.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        instance = UserRelationDetail.objects.create(
+            user=self.context['request'].user,
+            block_list=user2,
+        )
+
+        return instance
 
 
 class UserUnblockSerializer(serializers.ModelSerializer):
-    pass
+    user2 = serializers.IntegerField(allow_null=False)
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not block yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                               block_list=attrs["user2"]).exists()):
+            raise ValidationError("This user is not in blocked list.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        UserRelationDetail.objects.filter(
+            user=self.context['request'].user,
+            block_list=user2,
+        ).delete()
+
+        instance = UserRelationDetail.objects.all()
+
+        return instance
 
 
-class UserRequestAcceptDenySerializer(serializers.ModelSerializer):
-    pass
+class UserRequestAcceptSerializer(serializers.ModelSerializer):
+    user2 = serializers.IntegerField(allow_null=False)
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not accept request for yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,block_list=attrs["user2"]).exists()):
+            raise ValidationError("You blocked this user.")
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,req_rx=attrs["user2"]).exists()):
+            raise ValidationError("You did not receive request from this user.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        instance = UserRelationDetail.objects.create(
+            user=self.context['request'].user,
+            follower_list=user2,
+        )
+        UserRelationDetail.objects.filter(
+            user=self.context['request'].user,
+            req_rx=user2,
+        ).delete()
+
+        UserRelationDetail.objects.create(
+            user=user2,
+            following_list=self.context['request'].user,
+        )
+        UserRelationDetail.objects.filter(
+            user=user2,
+            req_sent=self.context['request'].user,
+        ).delete()
+
+        return instance
+
+
+class UserRequestDenySerializer(serializers.ModelSerializer):
+    user2 = serializers.IntegerField(allow_null=False)
+
+    class Meta:
+        model = UserRelationDetail
+        fields = ['user', 'user2']
+        read_only_fields = ("user",)
+
+    def validate(self, attrs):
+        if (attrs["user2"] == self.context['request'].user):
+            raise ValidationError("You can not accept request for yourself.")
+        elif (UserRelationDetail.objects.filter(user=attrs["user2"] ,block_list=self.context['request'].user.id).exists()):
+            raise ValidationError("You have been blocked by this user/ this user is not exist.")
+        elif (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,block_list=attrs["user2"]).exists()):
+            raise ValidationError("You blocked this user.")
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id ,req_rx=attrs["user2"]).exists()):
+            raise ValidationError("You did not receive request from this user.")
+
+        return attrs
+
+    def save(self, validated_data):
+        id = validated_data.pop('user2')
+        user2 = User.objects.get(id=id)
+
+        UserRelationDetail.objects.filter(
+            user=self.context['request'].user,
+            req_rx=user2,
+        ).delete()
+
+        UserRelationDetail.objects.filter(
+            user=user2,
+            req_sent=self.context['request'].user,
+        ).delete()
+
+        instance = UserRelationDetail.objects.all()
+
+        return instance
 
 
 
