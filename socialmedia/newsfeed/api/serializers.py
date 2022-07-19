@@ -84,16 +84,15 @@ class StatusVotesUpdateSerializer(serializers.ModelSerializer):
         if self.instance.user == self.context['request'].user:
             raise ValidationError("You can not like or dislike your own status.")
 
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                 following_list=self.instance.user.id).exists()):
+            raise ValidationError("This status not exist/ because you do not follow the user of the status.")
+
         elif attrs['up_vote'] == attrs['down_vote'] == None:
             raise ValidationError("Either like it or not.")
 
         elif attrs['up_vote'] == attrs['down_vote']:
             raise ValidationError("You can not like and dislike the status at same time.")
-
-        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user,
-                                                 following_list=self.instance.user.id).exists()):
-            raise ValidationError("This status not exist/ because you do not follow the user of the status.")
-
 
         elif attrs['up_vote'] == True:
             if not StatusVoteTracker.objects.filter(status=self.instance.id).exists():
@@ -187,8 +186,6 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         if value == False:
             raise ValidationError("You are allowed to either comment on a Status or on a Comment")
 
-        #add validation for the current user or the follower
-
         if (attrs["comment_photo"] == None) and (attrs["comment_text"] == ""):
             value = False
         elif (attrs["comment_photo"] != None) and (attrs["comment_text"] == ""):
@@ -199,7 +196,7 @@ class CommentCreateSerializer(serializers.ModelSerializer):
             value = True
 
         if value == False:
-            raise ValidationError("Either add a photo or the comment.")
+            raise ValidationError("Atleast add a photo or the comment.")
 
         return attrs
 
@@ -208,6 +205,23 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         base_comment = validated_data.pop('base_comment')
         comment_text = validated_data.pop('comment_text')
         comment_photo = validated_data.pop('comment_photo')
+
+        if status == None:
+            if not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                      following_list=base_comment.user.id).exists()):
+                if not (self.context['request'].user.id == base_comment.user.id):
+                    raise ValidationError("This base_comment not exist/ because you do not follow the user of the base_comment.")
+
+            elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                      following_list=base_comment.status.user.id).exists()):
+                if not (self.context['request'].user.id == base_comment.status.user.id):
+                    raise ValidationError("This status not exist/ because you do not follow the user of the status.")
+
+        else:
+            if not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                        following_list=status.user.id).exists()):
+                if not (self.context['request'].user.id == base_comment.status.user.id):
+                    raise ValidationError("This status not exist/ because you do not follow the user of the status.")
 
         if status == None:
             status = Comment.objects.get(id=base_comment.id).status
@@ -250,16 +264,25 @@ class CommentVotesUpdateSerializer(serializers.ModelSerializer):
         if self.instance.user == self.context['request'].user:
             raise ValidationError("You can not like or dislike your own comment.")
 
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                 following_list=self.instance.user.id).exists()):
+            raise ValidationError("This 'comment' is not exist(or you do not follow the user of the 'comment').")
+
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                        following_list=self.instance.base_comment.user.id).exists()):
+            if not (self.context['request'].user.id == self.instance.base_comment.user.id):
+                raise ValidationError("This 'base_comment' is not exist(or you do not follow the user of the 'base_comment').")
+
+        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
+                                                        following_list=self.instance.status.user.id).exists()):
+            if not (self.context['request'].user.id == self.instance.status.user.id):
+                raise ValidationError("This 'status' is not exist(or you do not follow the user of the 'status').")
+
         elif attrs['up_vote'] == attrs['down_vote'] == None:
             raise ValidationError("Either like it or not.")
 
         elif attrs['up_vote'] == attrs['down_vote']:
             raise ValidationError("You can not like and dislike the status at same time.")
-
-        elif not (UserRelationDetail.objects.filter(user=self.context['request'].user,
-                                                 following_list=self.instance.user.id).exists()):
-            raise ValidationError("This comment not exist/ because you do not follow the user of the status.")
-
 
         elif attrs['up_vote'] == True:
             if not CommentVoteTracker.objects.filter(comment=self.instance.id).exists():
