@@ -220,7 +220,7 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         else:
             if not (UserRelationDetail.objects.filter(user=self.context['request'].user.id,
                                                         following_list=status.user.id).exists()):
-                if not (self.context['request'].user.id == base_comment.status.user.id):
+                if not (self.context['request'].user.id == status.user.id):
                     raise ValidationError("This status not exist/ because you do not follow the user of the status.")
 
         if status == None:
@@ -356,6 +356,13 @@ class UserRelationDetailDetailSerializer(serializers.ModelSerializer):
                 {
                     'id':user.id,
                     'username':user.username,
+                    'no_of_status':Status.objects.filter(user=user.id).count(),
+                    'no_of_followings':UserRelationDetail.objects.filter(user=user.id).exclude(following_list=None).values_list('following_list', flat=True).count(),
+                    'no_of_followers':UserRelationDetail.objects.filter(user=user.id).exclude(follower_list=None).values_list('follower_list', flat=True).count(),
+                    'no_of_blocked_users': UserRelationDetail.objects.filter(user=user.id).exclude(block_list=None).values_list('block_list', flat=True).count(),
+                    'no_of_req_rx': UserRelationDetail.objects.filter(user=user.id).exclude(req_rx=None).values_list('req_rx', flat=True).count(),
+                    'no_of_req_sent': UserRelationDetail.objects.filter(user=user.id).exclude(req_sent=None).values_list('req_sent', flat=True).count(),
+
                 }
             )
         return user_list
@@ -632,31 +639,37 @@ class UserRequestDenySerializer(serializers.ModelSerializer):
         return instance
 
 
+class MywallSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(source="user.username")
 
+    comment_list = serializers.SerializerMethodField()
 
+    def get_comment_list(self, obj):
+        comment_list = []
+        for comment in Comment.objects.filter(status=obj.id):
+            comment_list.append(
+                {
+                    'id': comment.id,
+                    # 'status': comment.status.id,
+                    # 'base_comment': comment.base_comment,
+                    # 'user': comment.user.id,
+                    # 'comment_photo': comment.comment_photo,
+                    # 'comment_text': comment.comment_text,
+                    'like': comment.like,
+                    'dislike': comment.dislike,
+                    'comments_on_comment': comment.comments_on_comment,
+                }
+            )
+        print(comment_list)
+        return comment_list
 
+    class Meta:
+        model = Status
+        fields = ["id", "user", "status_photo", "status_text", "like", "dislike", "comments", "url", "comment_list"]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        extra_kwargs = {
+            "url": {"view_name": "api:mywall-detail", "lookup_field": "id"}
+        }
 
 
 

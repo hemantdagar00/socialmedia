@@ -13,7 +13,7 @@ from .serializers import StatusCreateSerializer, StatusDetailSerializer, StatusU
     CommentDetailSerializer, CommentCreateSerializer, CommentUpdateSerializer, CommentVotesUpdateSerializer, \
     UserFollowSerializer, UserUnfollowSerializer, UserBlockSerializer, UserUnblockSerializer, \
     UserRequestAcceptSerializer, UserRelationDetailDetailSerializer, UserRequestDenySerializer, \
-    UserRemoveFollowerSerializer
+    UserRemoveFollowerSerializer, MywallSerializer
 from socialmedia.newsfeed.models import Status, Comment, UserRelationDetail
 from rest_framework.exceptions import ValidationError
 
@@ -323,7 +323,51 @@ class UserRelationDetailViewSet(RetrieveModelMixin,
         return obj
 
 
+class MywallDetailViewSet(RetrieveModelMixin,
+                  ListModelMixin,
+                  UpdateModelMixin,
+                  DestroyModelMixin,
+                  CreateModelMixin,
+                  GenericViewSet):
 
+    queryset = Status.objects.all()
+    lookup_field = "id"
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return MywallSerializer
+        else:
+            return MywallSerializer
+
+    def get_queryset(self, *args, **kwargs): # used in get_object
+        return self.queryset.filter(user=self.request.user)
+
+
+class NewsDetailViewSet(RetrieveModelMixin,
+                  ListModelMixin,
+                  UpdateModelMixin,
+                  DestroyModelMixin,
+                  CreateModelMixin,
+                  GenericViewSet):
+
+    queryset = Status.objects.all()
+    lookup_field = "id"
+
+    def get_serializer_class(self):
+        if self.request.method == 'GET':
+            return MywallSerializer
+        else:
+            return MywallSerializer
+
+    def get_queryset(self, *args, **kwargs): # used in get_object
+        allowed = []
+        allowed.append(self.request.user.id)
+        following_list = UserRelationDetail.objects.filter(user=self.request.user.id).values_list('following_list', flat=True)
+
+        for i in following_list:
+           allowed.append(i)
+
+        return Status.objects.filter(user__in=allowed)
 
 
 
